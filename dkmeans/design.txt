@@ -5,7 +5,6 @@ local file:
 
 0 - LOCAL & REMOTE:
     create temporary directory
-    check input
 
 1 - REMOTE: initialize parameters
     KEPT ON REMOTE
