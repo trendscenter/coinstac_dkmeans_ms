@@ -15,13 +15,13 @@ DEFAULT_config_file = 'config.cfg'
 DEFAULT_k = 5
 DEFAULT_epsilon = 0.00001
 DEFAULT_shuffle = True
-DEFAULT_lr = 0.001
+DEFAULT_learning_rate = 0.001
 DEFAULT_verbose = True
 DEFAULT_optimization = 'lloyd'
 
 
 def remote_init_env(work_dir=DEFAULT_work_dir, config_file=DEFAULT_config_file, k=DEFAULT_k,
-                    optimization=DEFAULT_optimization, epsilon=DEFAULT_epsilon, lr=DEFAULT_lr,
+                    optimization=DEFAULT_optimization, epsilon=DEFAULT_epsilon, learning_rate=DEFAULT_learning_rate,
                     verbose=DEFAULT_verbose):
     """
         Initialize the remote environment, config file if necessary.
@@ -35,7 +35,7 @@ def remote_init_env(work_dir=DEFAULT_work_dir, config_file=DEFAULT_config_file, 
     if not os.path.exists(config_path):
         config = configparser.ConfigParser()
         config['REMOTE'] = dict(k=k, optimization=optimization, epsilon=epsilon,
-                                lr=lr, verbose=verbose)
+                                learning_rate=learning_rate, verbose=verbose)
         with open(config_path, 'w') as file:
             config.write(file)
     # output
@@ -44,6 +44,7 @@ def remote_init_env(work_dir=DEFAULT_work_dir, config_file=DEFAULT_config_file, 
                                   work_dir=work_dir,
                                   config_file=config_file,
                                   k=k,
+                                  learning_rate=learning_rate,
                                   optimization=optimization,
                                   shuffle=shuffle,
                                   computation_phase="remote_init_env"
