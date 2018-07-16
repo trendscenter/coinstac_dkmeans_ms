@@ -8,10 +8,11 @@ import json
 import logging
 import configparser
 import numpy as np
+import remote_computations as remote
+import local_computations as local
 
 
-DEFAULT_work_dir = './.coinstac_tmp/'
-DEFAULT_config_file = 'config.cfg'
+CONFIG_FILE = 'config.cfg'
 DEFAULT_k = 5
 DEFAULT_epsilon = 0.00001
 DEFAULT_shuffle = True
@@ -20,19 +21,42 @@ DEFAULT_verbose = True
 DEFAULT_optimization = 'lloyd'
 
 
-def remote_init_env(work_dir=DEFAULT_work_dir, config_file=DEFAULT_config_file, k=DEFAULT_k,
+def remote_init_env(config_file=DEFAULT_config_file, k=DEFAULT_k,
                     optimization=DEFAULT_optimization, epsilon=DEFAULT_epsilon, learning_rate=DEFAULT_learning_rate,
                     verbose=DEFAULT_verbose):
     """
-        Initialize the remote environment, config file if necessary.
+        # Description:
+            Initialize the remote environment, creating the config file.
+
+        # PREVIOUS PHASE:
+            None
+
+        # INPUT:
+
+            |   name            |   type    |   default     |
+            |   ---             |   ---     |   ---         |
+            |   config_file     |   str     |   config.cfg  |
+            |   k               |   int     |   5           |
+            |   optimization    |   str     |   lloyd       |
+            |   epsilon         |   float   |   0.00001     |
+            |   shuffle         |   bool    |   False       |
+            |   data_file       |   str     |   data.txt    |
+            |   learning_rate   |   float   |   0.001       |
+            |   verbose         |   float   |   True        |
+
+        # OUTPUT:
+            - config file written to disk
+            - k
+            - learning_rate
+            - optimization
+            - shuffle
+
+        # NEXT PHASE:
+            local_init_env
     """
+
     logging.info('REMOTE: Initializing remote environment')
-    # initialize environment
-    if not os.path.exists(work_dir):
-        os.makedirs(work_dir)
-    # create parameter / config file if it doesn't exist
-    config_path = os.path.join(work_dir, config_file)
-    if not os.path.exists(config_path):
+    if not os.path.exists(config_file):
         config = configparser.ConfigParser()
         config['REMOTE'] = dict(k=k, optimization=optimization, epsilon=epsilon,
                                 learning_rate=learning_rate, verbose=verbose)
@@ -53,9 +77,25 @@ def remote_init_env(work_dir=DEFAULT_work_dir, config_file=DEFAULT_config_file, 
     return json.dumps(computation_output)
 
 
-def remote_init_centroids(args, work_dir=DEFAULT_work_dir, config_file=DEFAULT_config_file):
+def remote_init_centroids(args, config_file=DEFAULT_config_file):
     """
-        Select K random centroids from the local centroids
+        # Description:
+            Initialize K centroids from locally selected centroids.
+
+        # PREVIOUS PHASE:
+            local_init_centroids
+
+        # INPUT:
+
+            |   name             |   type    |   default     |
+            |   ---              |   ---     |   ---         |
+            |   config_file      |   str     |   config.cfg  |
+
+        # OUTPUT:
+            - centroids: list of numpy arrays
+
+        # NEXT PHASE:
+            local_compute_optimizer
     """
     logging.info('REMOTE: Initializing centroids')
     # Have each site compute k initial clusters locally
@@ -76,48 +116,128 @@ def remote_init_centroids(args, work_dir=DEFAULT_work_dir, config_file=DEFAULT_c
     return json.dumps(computation_output)
 
 
-def remote_aggregate_optimizer(args):
+def remote_aggregate_optimizer(args, config_file=CONFIG_FILE):
     """
-        Aggregate either with sum or mean
+        # Description:
+            Aggregate optimizers sent from local nodes.
+
+        # PREVIOUS PHASE:
+            local_compute_optimizer
+
+        # INPUT:
+
+            |   name             |   type    |   default     |
+            |   ---              |   ---     |   ---         |
+            |   config_file      |   str     |   config.cfg  |
+
+        # OUTPUT:
+            - remote_optimizer: list of K numpy arrays
+
+        # NEXT PHASE:
+            remote_optimization_step
     """
+    config = configparser.ConfigParser()
+    config.read(config_file)
+    optimization = config['REMOTE']['optimization']
     logging.info('REMOTE: Aggregate optimizer')
+    local_optimizers = [site['local_optimizer'] for site in args]
+    remote_optimizer = remote.aggregate_sum(local_optimizers)
+    if optimization == 'lloyd':
+        # for the mean, we need to further divide the number of sites
+        remote_optimizer = [r / s for r in remote_optimizer]
+
     computation_output = dict(
         output=dict(
-            computation_phase="remote_aggregate_otpimizer"
+            remote_optimizer=remote_optimizer,
+            computation_phase="remote_aggregate_optimizer"
             ),
         success=True
     )
     return json.dumps(computation_output)
 
 
-def remote_optimization_step(args):
+def remote_optimization_step(args, remote_centroids=None, remote_optimizer=None,
+                             config_file=CONFIG_FILE):
     """
-        Aggregate with optimization step.
+        # Description:
+            Use optimizer to take the next step.
+
+        # PREVIOUS PHASE:
+            remote_aggregate_optimizer
+
+        # INPUT:
+
+            |   name             |   type    |   default     |
+            |   ---              |   ---     |   ---         |
+            |   config_file      |   str     |   config.cfg  |
+            |   remote_centroids |   list    |   config.cfg  |
+            |   remote_optimizer |   list    |   config.cfg  |
+
+        # OUTPUT:
+            - previous centroids: list of numpy arrays
+            - remote centroids: list of numpy arrays
+
+        # NEXT PHASE:
+            remote_check_convergence
     """
+
     logging.info('REMOTE: Optimization step')
+    config = configparser.ConfigParser()
+    config.read(config_file)
+    optimization = config['REMOTE']['optimization']
+    if optimization == 'lloyd':
+        # Then, update centroids as corresponding to the local mean
+        previous_centroids = remote_centroids[:]
+        remote_centroids = remote_optimizer[:]
+
+    elif optimization == 'gradient':
+        # Then, update centroids according to one step of gradient descent
+        [remote_centroids, previous_centroids] = \
+            local.gradient_step(remote_optimizer, remote_centroids)
     computation_output = dict(
         output=dict(
-            computation_phase="remote_optimization_step"
+            computation_phase="remote_optimization_step",
+            previous_centroids=previous_centroids,
+            remote_centroids=remote_centroids
             ),
         success=True
     )
     return json.dumps(computation_output)
 
 
-def remote_check_convergence(args):
+def remote_check_convergence(args, remote_centroids=None, previous_centroids=None,
+                             config_file=CONFIG_FILE):
     """
-        Check convergence
+        # Description:
+            Check convergence.
+
+        # PREVIOUS PHASE:
+            remote_aggregate_optimizer
+
+        # INPUT:
+
+            |   name               |   type    |   default     |
+            |   ---                |   ---     |   ---         |
+            |   config_file        |   str     |   config.cfg  |
+            |   remote_centroids   |   list    |   config.cfg  |
+            |   previous_centroids |   list    |   config.cfg  |
+
+        # OUTPUT:
+            - boolean encoded in name of phase
+
+        # NEXT PHASE:
+            remote_check_convergence
     """
     logging.info('REMOTE: Check convergence')
+    config = configparser.ConfigParser()
+    config.read(config_file)
+    epsilon = config['REMOTE']['epsilon']
+    remote_check, delta = local.check_stopping(remote_centroids,
+                                               previous_centroids, epsilon)
+    new_phase = "remote_converged_true" if remote_check else "remote_converged_false"
     computation_output = dict(
         output=dict(
-            computation_phase="remote_converged_true"
-            ),
-        success=True
-    )
-    computation_output = dict(
-        output=dict(
-            computation_phase="remote_converged_false"
+            computation_phase=new_phase
             ),
         success=True
     )
@@ -126,7 +246,7 @@ def remote_check_convergence(args):
 
 def remote_aggregate_output(args):
     """
-        Aggregate output.
+        Aggregate output. TODO: What needs to be aggregated
     """
     logging.info('REMOTE: Aggregating input')
     computation_output = dict(

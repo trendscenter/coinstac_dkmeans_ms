@@ -1,6 +1,9 @@
 import os
 import sys
+import logging
 import numpy as np
+import configparser
+import local_computations as local
 
 CONFIG_FILE = 'config.cfg'
 DEFAULT_data_file = 'data.txt'
@@ -13,14 +16,35 @@ DEFAULT_optimization = 'lloyd'
 def local_init_env(config_file=CONFIG_FILE, k=DEFAULT_k, optimization=DEFAULT_optimization, shuffle=DEFAULT_shuffle,
                    data_file=DEFAULT_data_file, learning_rate=DEFAULT_learning_rate, **kwargs):
     """
+        # Description:
+            Initialize the local environment, creating the config file.
 
+        # PREVIOUS PHASE:
+            remote_init_env
+
+        # INPUT:
+
+            |   name            |   type    |   default     |
+            |   ---             |   ---     |   ---         |
+            |   config_file     |   str     |   config.cfg  |
+            |   k               |   int     |   5           |
+            |   optimization    |   str     |   lloyd       |
+            |   shuffle         |   bool    |   False       |
+            |   data_file       |   str     |   data.txt    |
+            |   learning_rate   |   float   |   0.001       |
+
+        # OUTPUT:
+            - config file written to disk
+
+        # NEXT PHASE:
+            local_init_centroids
     """
     logging.info('LOCAL: Initializing remote environment')
     if not os.path.exists(config_file):
         config = configparser.ConfigParser()
         config['LOCAL'] = dict(k=k, optimization=optimization, shuffle=shuffle, data_file=data_file,
                                learning_rate=learning_rate)
-        with open(config_path, 'w') as file:
+        with open(config_file, 'w') as file:
             config.write(file)
     # output
     computation_output = dict(
@@ -34,6 +58,25 @@ def local_init_env(config_file=CONFIG_FILE, k=DEFAULT_k, optimization=DEFAULT_op
 
 
 def local_init_centroids(config_file=CONFIG_FILE, **kwargs):
+    """
+        # Description:
+            Initialize K centroids from own data.
+
+        # PREVIOUS PHASE:
+            local_init_env
+
+        # INPUT:
+
+            |   name             |   type    |   default     |
+            |   ---              |   ---     |   ---         |
+            |   config_file      |   str     |   config.cfg  |
+
+        # OUTPUT:
+            - centroids: list of numpy arrays
+
+        # NEXT PHASE:
+            remote_init_centroids
+    """
     logging.info('LOCAL: Initializing centroids')
     config = configparser.ConfigParser()
     config.read(config_file)
@@ -51,8 +94,34 @@ def local_init_centroids(config_file=CONFIG_FILE, **kwargs):
     return json.dumps(computation_output)
 
 
-def local_compute_clustering(config_file=CONFIG_FILE, remote_centroids=None, computation_phase="", **kwargs):
-    logging.info('LOCAL: Initializing centroids')
+def local_compute_clustering(config_file=CONFIG_FILE, remote_centroids=None, computation_phase=None, **kwargs):
+    """
+        # Description:
+            Assign data instances to clusters.
+
+        # PREVIOUS PHASE:
+            remote_init_centroids (on first run only)
+            remote_cehck_convergence
+
+        # INPUT:
+
+            |   name                |   type    |   default     |
+            |   ---                 |   ---     |   ---         |
+            |   config_file         |   str     |   config.cfg  |
+            |   remote_centroids    |   list    |   None        |
+            |   computation_phase   |   list    |   None        |
+
+        # OUTPUT:
+            - centroids: list of numpy arrays
+
+        # NEXT PHASE:
+            remote_init_centroids
+    """
+    logging.info('LOCAL: computing clustering')
+    if remote_centroids is None:
+        raise ValueError("LOCAL: at local_compute_clustering - remote_centroids not passed correctly")
+    if computation_phase is None:
+        raise ValueError("LOCAL: at local_compute_clustering - computation_phase not passed correctly")
     config = configparser.ConfigParser()
     config.read(config_file)
     data = np.loadtxt(config['LOCAL']['data_file'])
@@ -74,7 +143,32 @@ def local_compute_clustering(config_file=CONFIG_FILE, remote_centroids=None, com
 
 
 def local_compute_optimizer(config_file=CONFIG_FILE, remote_centroids=None, cluster_labels=None, **kwargs):
-    logging.info('LOCAL: Initializing centroids')
+    """
+        # Description:
+            Compute local optimizers with local data.
+
+        # PREVIOUS PHASE:
+            local_compute_clustering
+
+        # INPUT:
+
+            |   name                |   type    |   default     |
+            |   ---                 |   ---     |   ---         |
+            |   config_file         |   str     |   config.cfg  |
+            |   remote_centroids    |   list    |   None        |
+            |   cluster_labels      |   list    |   None        |
+
+        # OUTPUT:
+            - centroids: list of numpy arrays
+
+        # NEXT PHASE:
+            remote_init_centroids
+    """
+    if remote_centroids is None:
+        raise ValueError("LOCAL: at local_compute_clustering - remote_centroids not passed correctly")
+    if cluster_labels is None:
+        raise ValueError("LOCAL: at local_compute_clustering - cluster_labels not passed correctly")
+    logging.info('LOCAL: computing optimizers')
     config = configparser.ConfigParser()
     config.read(config_file)
     data = np.loadtxt(config['LOCAL']['data_file'])
@@ -96,7 +190,6 @@ def local_compute_optimizer(config_file=CONFIG_FILE, remote_centroids=None, clus
         success=True
     )
     return json.dumps(computation_output)
-
 
 
 if __name__ == '__main__':
