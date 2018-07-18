@@ -197,23 +197,25 @@ if __name__ == '__main__':
     parsed_args = json.loads(sys.stdin.read())
     phase_key = list(list_recursive(parsed_args, 'computation_phase'))
 
-    if "remote_init_env" in phase_key:
+    if "remote_init_env" in phase_key:  # REMOTE -> LOCAL
         computation_output = local_init_env(**parsed_args['input'])
         sys.stdout.write(computation_output)
-    elif "local_init_env" in phase_key:
+    elif "local_init_env" in phase_key:  # LOCAL -> LOCAL
         computation_output = local_init_centroids(**parsed_args['input'])
         sys.stdout.write(computation_output)
-    elif "remote_init_centroids" in phase_key:
+    elif "remote_init_centroids" in phase_key:  # REMOTE -> LOCAL
         computation_output = local_compute_clustering(**parsed_args['input'])
         sys.stdout.write(computation_output)
-    elif "local_compute_clustering" in phase_key:
+    elif "local_compute_clustering" in phase_key:  # LOCAL -> LOCAL
         computation_output = local_compute_optimizer(**parsed_args['input'])
         sys.stdout.write(computation_output)
-    elif "remote_optimization_step" in phase_key:
+    elif "remote_optimization_step" in phase_key:  # REMOTE -> LOCAL
         computation_output = local_compute_clustering(**parsed_args['input'])
         sys.stdout.write(computation_output)
-    elif 'remote_converged_false' in phase_key:
+    elif 'remote_converged_false' in phase_key:  # REMOTE -> LOCAL
         computation_output = local_compute_optimizer(**parsed_args['input'])
         sys.stdout.write(computation_output)
+    elif 'remote_aggregate_output' in phase_key:  # REMOTE -> LOCAL
+        computation_output = local_compute_clustering(**parsed_args['input'])
     else:
         raise ValueError('Phase error occurred')
