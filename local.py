@@ -13,6 +13,30 @@ DEFAULT_learning_rate = 0.001
 DEFAULT_optimization = 'lloyd'
 
 
+def local_noop(**kwargs):
+    """
+        # Description:
+            Nooperation
+
+        # PREVIOUS PHASE:
+            NA
+
+        # INPUT:
+
+        # OUTPUT:
+
+        # NEXT PHASE:
+            remote_init_env
+    """
+    computation_output = dict(
+        output=dict(
+            computation_phase="local_noop"
+            ),
+        success=True
+    )
+    return json.dumps(computation_output)
+
+
 def local_init_env(config_file=CONFIG_FILE, k=DEFAULT_k, optimization=DEFAULT_optimization, shuffle=DEFAULT_shuffle,
                    data_file=DEFAULT_data_file, learning_rate=DEFAULT_learning_rate, **kwargs):
     """
@@ -196,18 +220,16 @@ if __name__ == '__main__':
 
     parsed_args = json.loads(sys.stdin.read())
     phase_key = list(list_recursive(parsed_args, 'computation_phase'))
-
-    if "remote_init_env" in phase_key:  # REMOTE -> LOCAL
-        computation_output = local_init_env(**parsed_args['input'])
+    if not phase_key:  # FIRST PHASE
+        computation_output = local_noop(**parsed_args['input'])
         sys.stdout.write(computation_output)
-    elif "local_init_env" in phase_key:  # LOCAL -> LOCAL
-        computation_output = local_init_centroids(**parsed_args['input'])
+    elif "remote_init_env" in phase_key:  # REMOTE -> LOCAL
+        computation_output = local_init_env(**parsed_args['input'])
+        computation_output = local_init_centroids(**computation_output)
         sys.stdout.write(computation_output)
     elif "remote_init_centroids" in phase_key:  # REMOTE -> LOCAL
         computation_output = local_compute_clustering(**parsed_args['input'])
-        sys.stdout.write(computation_output)
-    elif "local_compute_clustering" in phase_key:  # LOCAL -> LOCAL
-        computation_output = local_compute_optimizer(**parsed_args['input'])
+        computation_output = local_compute_optimizer(**computation_output)
         sys.stdout.write(computation_output)
     elif "remote_optimization_step" in phase_key:  # REMOTE -> LOCAL
         computation_output = local_compute_clustering(**parsed_args['input'])
@@ -218,4 +240,4 @@ if __name__ == '__main__':
     elif 'remote_aggregate_output' in phase_key:  # REMOTE -> LOCAL
         computation_output = local_compute_clustering(**parsed_args['input'])
     else:
-        raise ValueError('Phase error occurred')
+        raise ValueError('Phase error occurred at LOCAL')

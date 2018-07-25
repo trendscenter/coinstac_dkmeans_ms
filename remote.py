@@ -21,7 +21,7 @@ DEFAULT_verbose = True
 DEFAULT_optimization = 'lloyd'
 
 
-def remote_init_env(config_file=DEFAULT_config_file, k=DEFAULT_k,
+def remote_init_env(config_file=CONFIG_FILE, k=DEFAULT_k,
                     optimization=DEFAULT_optimization, epsilon=DEFAULT_epsilon, learning_rate=DEFAULT_learning_rate,
                     verbose=DEFAULT_verbose):
     """
@@ -77,7 +77,7 @@ def remote_init_env(config_file=DEFAULT_config_file, k=DEFAULT_k,
     return json.dumps(computation_output)
 
 
-def remote_init_centroids(args, config_file=DEFAULT_config_file):
+def remote_init_centroids(args, config_file=CONFIG_FILE):
     """
         # Description:
             Initialize K centroids from locally selected centroids.
@@ -156,7 +156,7 @@ def remote_aggregate_optimizer(args, config_file=CONFIG_FILE):
     return json.dumps(computation_output)
 
 
-def remote_optimization_step(args, remote_centroids=None, remote_optimizer=None,
+def remote_optimization_step(remote_centroids=None, remote_optimizer=None,
                              config_file=CONFIG_FILE):
     """
         # Description:
@@ -167,11 +167,11 @@ def remote_optimization_step(args, remote_centroids=None, remote_optimizer=None,
 
         # INPUT:
 
-            |   name             |   type    |   default     |
-            |   ---              |   ---     |   ---         |
-            |   config_file      |   str     |   config.cfg  |
-            |   remote_centroids |   list    |   config.cfg  |
-            |   remote_optimizer |   list    |   config.cfg  |
+            |   name               |   type    |   default     |
+            |   ---                |   ---     |   ---         |
+            |   config_file        |   str     |   config.cfg  |
+            |   remote_centroids   |   list    |   None        |
+            |   remote_optimizer   |   list    |   None        |
 
         # OUTPUT:
             - previous centroids: list of numpy arrays
@@ -219,11 +219,13 @@ def remote_check_convergence(args, remote_centroids=None, previous_centroids=Non
             |   name               |   type    |   default     |
             |   ---                |   ---     |   ---         |
             |   config_file        |   str     |   config.cfg  |
-            |   remote_centroids   |   list    |   config.cfg  |
-            |   previous_centroids |   list    |   config.cfg  |
+            |   remote_centroids   |   list    |   None        |
+            |   previous_centroids |   list    |   None        |
 
         # OUTPUT:
             - boolean encoded in name of phase
+            - delta
+            - remote_centroids
 
         # NEXT PHASE:
             remote_check_convergence
@@ -237,21 +239,41 @@ def remote_check_convergence(args, remote_centroids=None, previous_centroids=Non
     new_phase = "remote_converged_true" if remote_check else "remote_converged_false"
     computation_output = dict(
         output=dict(
-            computation_phase=new_phase
+            computation_phase=new_phase,
+            delta=delta,
+            remote_centroids=remote_centroids,
             ),
         success=True
     )
     return json.dumps(computation_output)
 
 
-def remote_aggregate_output(args):
+def remote_aggregate_output(remote_centroids=None):
     """
-        Aggregate output. TODO: What needs to be aggregated
+        # Description:
+            Check convergence.
+
+        # PREVIOUS PHASE:
+            remote_check_convergence
+
+        # INPUT:
+
+            |   name               |   type    |   default     |
+            |   ---                |   ---     |   ---         |
+            |   config_file        |   str     |   config.cfg  |
+            |   remote_centroids   |   list    |   None        |
+            |   previous_centroids |   list    |   None        |
+
+        # OUTPUT:
+            -remote_centroids
+
     """
     logging.info('REMOTE: Aggregating input')
     computation_output = dict(
         output=dict(
-            computation_phase="remote_aggregate_output"
+            computation_phase="remote_aggregate_output",
+            remote_centroids=remote_centroids,
+
             ),
         success=True
     )
@@ -263,23 +285,20 @@ if __name__ == '__main__':
     parsed_args = json.loads(sys.stdin.read())
     phase_key = list(list_recursive(parsed_args, 'computation_phase'))
 
-    if not phase_key:
+    if 'local_noop' in phase_key:  # FIRST PHASE
         computation_output = remote_init_env(**parsed_args['input'])
         sys.stdout.write(computation_output)
-    elif 'local_init_centroids' in phase_key:
+    elif 'local_init_centroids' in phase_key:  # LOCAL -> REMOTE
         computation_output = remote_init_centroids(parsed_args['input'])
         sys.stdout.write(computation_output)
-    elif 'local_compute_optimizer' in phase_key:
+    elif 'local_compute_optimizer' in phase_key: # LOCAL -> REMOTE
         computation_output = remote_aggregate_optimizer(parsed_args['input'])
+        computation_output = remote_optimization_step(**computation_output)
         sys.stdout.write(computation_output)
-    elif 'remote_aggregate_otpimizer' in phase_key:
-        computation_output = remote_optimization_step(parsed_args['input'])
-        sys.stdout.write(computation_output)
-    elif 'local_compute_clustering_2' in phase_key:
+    elif 'local_compute_clustering_2' in phase_key:  # LOCAL -> REMOTE
         computation_output = remote_check_convergence(parsed_args['input'])
-        sys.stdout.write(computation_output)
-    elif 'remote_converged_true' in phase_key:
-        computation_outut = remote_aggregate_output(parsed_args['input'])
+        if 'remote_converged_true' in computation_output['output']['computation_phase']:
+            computation_output = remote_aggregate_output(**computation_output)
         sys.stdout.write(computation_output)
     else:
         raise ValueError('Oops')

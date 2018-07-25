@@ -1,43 +1,27 @@
 {
   "meta": {
-    "name": "MSLR FreeSurfer",
-    "id": "dkmeans-ss",
+    "name": "Multi-Shot DKmeans",
+    "id": "dkmeans-ms",
     "version": "v1.0.0",
-    "repository": "https:\/\/github.com\/MRN-Code\/coinstac_msr_fsl",
-    "description": "Multi-shot Regression on FreeSurfer Data"
+    "repository": "https:\/\/github.com\/MRN-Code\/coinstac_dkmeans_ms",
+    "description": "Multi-shot DKmeans"
   },
   "computation": {
     "type": "docker",
-    "dockerImage": "dkmeans-ss",
+    "dockerImage": "dkmeans-ms",
     "command": [
       "python",
       "\/computation\/local.py"
     ],
     "remote": {
       "type": "docker",
-      "dockerImage": "dkmeans-ss",
+      "dockerImage": "dkmeans-ms",
       "command": [
         "python",
         "\/computation\/remote.py"
       ]
     },
     "input": {
-      "lambda":
-      {
-        "defaultValue": 0,
-        "label": "Lambda",
-        "max": 1,
-        "min": 0,
-        "step": 0.05,
-        "type": "number",
-        "source": "owner"
-      },
-      "covariates":
-      {
-        "label": "Covariates",
-        "type": "array",
-        "items": ["boolean", "number"]
-      },
       "data": {
         "label": "Data",
         "type": "array",
