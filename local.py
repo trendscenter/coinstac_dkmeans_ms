@@ -13,7 +13,7 @@ DEFAULT_learning_rate = 0.001
 DEFAULT_optimization = 'lloyd'
 
 
-def local_noop(**kwargs):
+def dkm_local_noop(**kwargs):
     """
         # Description:
             Nooperation
@@ -30,15 +30,15 @@ def local_noop(**kwargs):
     """
     computation_output = dict(
         output=dict(
-            computation_phase="local_noop"
-            ),
+            computation_phase="dkm_local_noop"
+        ),
         success=True
     )
     return json.dumps(computation_output)
 
 
-def local_init_env(config_file=CONFIG_FILE, k=DEFAULT_k, optimization=DEFAULT_optimization, shuffle=DEFAULT_shuffle,
-                   data_file=DEFAULT_data_file, learning_rate=DEFAULT_learning_rate, **kwargs):
+def dkm_local_init_env(config_file=CONFIG_FILE, k=DEFAULT_k, optimization=DEFAULT_optimization, shuffle=DEFAULT_shuffle,
+                       data_file=DEFAULT_data_file, learning_rate=DEFAULT_learning_rate, **kwargs):
     """
         # Description:
             Initialize the local environment, creating the config file.
@@ -74,14 +74,14 @@ def local_init_env(config_file=CONFIG_FILE, k=DEFAULT_k, optimization=DEFAULT_op
     computation_output = dict(
         output=dict(
             config_file=config_file,
-            computation_phase="local_init_env"
-            ),
+            computation_phase="dkm_local_init_env"
+        ),
         success=True
     )
     return json.dumps(computation_output)
 
 
-def local_init_centroids(config_file=CONFIG_FILE, **kwargs):
+def dkm_local_init_centroids(config_file=CONFIG_FILE, **kwargs):
     """
         # Description:
             Initialize K centroids from own data.
@@ -111,14 +111,14 @@ def local_init_centroids(config_file=CONFIG_FILE, **kwargs):
         output=dict(
             config_file=config_file,
             centroids=centroids,
-            computation_phase="local_init_env"
-            ),
+            computation_phase="dkm_local_init_env"
+        ),
         success=True
     )
     return json.dumps(computation_output)
 
 
-def local_compute_clustering(config_file=CONFIG_FILE, remote_centroids=None, computation_phase=None, **kwargs):
+def dkm_local_compute_clustering(config_file=CONFIG_FILE, remote_centroids=None, computation_phase=None, **kwargs):
     """
         # Description:
             Assign data instances to clusters.
@@ -152,21 +152,21 @@ def local_compute_clustering(config_file=CONFIG_FILE, remote_centroids=None, com
 
     cluster_labels = local.compute_clustering(data, remote_centroids)
 
-    new_comp_phase = "local_compute_clustering"
-    if computation_phase == "remote_optimization_step":
-        new_comp_phase = "local_compute_clustering_2"
+    new_comp_phase = "dkm_local_compute_clustering"
+    if computation_phase == "dkm_remote_optimization_step":
+        new_comp_phase = "dkm_local_compute_clustering_2"
     computation_output = dict(
         output=dict(
             computation_phase=new_comp_phase,
             cluster_labels=cluster_labels,
             remote_centroids=remote_centroids,
-            ),
+        ),
         success=True
     )
     return json.dumps(computation_output)
 
 
-def local_compute_optimizer(config_file=CONFIG_FILE, remote_centroids=None, cluster_labels=None, **kwargs):
+def dkm_local_compute_optimizer(config_file=CONFIG_FILE, remote_centroids=None, cluster_labels=None, **kwargs):
     """
         # Description:
             Compute local optimizers with local data.
@@ -204,13 +204,13 @@ def local_compute_optimizer(config_file=CONFIG_FILE, remote_centroids=None, clus
     elif optimization == 'gradient':
         # Gradient descent has sites compute gradients locally
         local_optimizer = \
-            local.compute_gradient(node, cluster_labels[i],
+            local.compute_gradient(data, cluster_labels[i],
                                    remote_centroids, learning_rate)
     computation_output = dict(
         output=dict(
             local_optimizer=local_optimizer,
-            computation_phase="remote_aggregate_output"
-            ),
+            computation_phase="dkm_local_compute_optimizer"
+        ),
         success=True
     )
     return json.dumps(computation_output)
