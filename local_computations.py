@@ -12,7 +12,7 @@ Common Input Specifications:
 """
 import numpy as np
 from scipy.spatial.distance import cdist
-from dkmeans.data import get_data_dims
+from .data import get_data_dims
 
 
 def compute_mean(local_X, local_cluster_labels, k):
@@ -25,7 +25,7 @@ def compute_mean(local_X, local_cluster_labels, k):
     """
     m, n = get_data_dims(local_X)
     npinf = np.zeros([m, n])
-    local_means = [[]]*k
+    local_means = [[]] * k
     for label, x in zip(local_cluster_labels, local_X):
         local_means[label] += [x]
 
@@ -43,8 +43,9 @@ def gradient_step(local_gradients, local_centroids):
         Output: updated local centroids, previous centroids from last iteration
     """
     previous = local_centroids[:]
-    local_centroids = [wk + local_gradients[k]
-                       for k, wk in enumerate(local_centroids)]
+    local_centroids = [
+        wk + local_gradients[k] for k, wk in enumerate(local_centroids)
+    ]
     return local_centroids, previous
 
 
@@ -70,11 +71,13 @@ def check_stopping(local_centroids, previous_centroids, epsilon):
         Output: True if delta is above the threshold, else False
     """
     m, n = get_data_dims(local_centroids)
-    flat_centroids = [np.matrix(w.reshape(1, m*n)) for w in local_centroids]
-    flat_previous = [np.matrix(w.reshape(1, m*n)) for w in previous_centroids]
+    flat_centroids = [np.matrix(w.reshape(1, m * n)) for w in local_centroids]
+    flat_previous = [
+        np.matrix(w.reshape(1, m * n)) for w in previous_centroids
+    ]
     # delta is the change in centroids, computed by distance metric
-    delta = np.sum([cdist(w, flat_previous[k])
-                    for k, w in enumerate(flat_centroids)])
+    delta = np.sum(
+        [cdist(w, flat_previous[k]) for k, w in enumerate(flat_centroids)])
     return delta > epsilon, delta
 
 
@@ -90,8 +93,8 @@ def compute_clustering(local_X, local_centroids):
     """
     cluster_labels = []
     m, n = get_data_dims(local_X)
-    X_flat = [np.matrix(x.reshape(1, m*n)) for x in local_X]
-    w_flat = [np.matrix(w.reshape(1, m*n)) for w in local_centroids]
+    X_flat = [np.matrix(x.reshape(1, m * n)) for x in local_X]
+    w_flat = [np.matrix(w.reshape(1, m * n)) for w in local_centroids]
     for x in X_flat:
         distances = [cdist(x, w) for w in w_flat]
         min_index = distances.index(np.min(distances))
@@ -108,8 +111,7 @@ def compute_gradient(local_X, local_cluster_labels, local_centroids, lr):
         Output: local_grad - local gradients as list of k many gradients
     """
     m, n = get_data_dims(local_X)
-    local_grad = [np.zeros([m, n])
-                  for i, e in enumerate(local_centroids)]
+    local_grad = [np.zeros([m, n]) for i, e in enumerate(local_centroids)]
     for x, i in zip(local_X, local_cluster_labels):
-        local_grad[i] += lr*(x - local_centroids[i])
+        local_grad[i] += lr * (x - local_centroids[i])
     return local_grad

@@ -6,9 +6,8 @@ import scipy.io as sio
 import numpy as np
 import itertools
 
-
 from sklearn import datasets
-from dkmeans.util import split_chunks
+from .util import split_chunks
 
 DEFAULT_DATASET = "gaussian"
 DEFAULT_THETA = [[0, 1]]
@@ -24,18 +23,26 @@ REAL_TC_DIR = ("/export/mialab/users/bbaker/projects/djica/tests3"
                "/final/s2016-n63-nc50-r1/IC.mat")
 
 
-def get_dataset(N, dataset=DEFAULT_DATASET, theta=DEFAULT_THETA,
-                dfnc_window=DEFAULT_WINDOW, m=DEFAULT_M, n=DEFAULT_N):
+def get_dataset(N,
+                dataset=DEFAULT_DATASET,
+                theta=DEFAULT_THETA,
+                dfnc_window=DEFAULT_WINDOW,
+                m=DEFAULT_M,
+                n=DEFAULT_N):
     """Convenience function for getting data sets by name
         TODO: Should this be moved to the load data functions? (yes)
     """
     X = None
     if dataset == 'gaussian':
         # TODO!: This line is horrible and hacky, and needs to be fixed
-        X = list(itertools.chain.from_iterable([
-                            simulated_gaussian_cluster(int(N/len(theta)), t[0],
-                                                       t[1], m=m, n=n)
-                            for t in theta]))
+        X = list(
+            itertools.chain.from_iterable([
+                simulated_gaussian_cluster(int(N / len(theta)),
+                                           t[0],
+                                           t[1],
+                                           m=m,
+                                           n=n) for t in theta
+            ]))
     elif dataset == 'iris':
         X = datasets.load_iris().data[0:N]
     elif dataset == 'simulated_fmri':
@@ -80,8 +87,8 @@ def window_tc(TC, winsize, transpose=DEFAULT_transpose):
             TT = TT.T
         TC_w += [np.cov(TT.T)]
         TC_v += [np.var(TT.T)]
-        start = start+1
-        end = start+winsize
+        start = start + 1
+        end = start + winsize
     TC_w = TC_w[TC_v.index(np.max(TC_v))]
     return [TC_w]
 
