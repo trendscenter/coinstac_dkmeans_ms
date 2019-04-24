@@ -101,7 +101,7 @@ def window_all_tc(Shat_, winsize, n=0, transpose=DEFAULT_transpose):
     if n <= 0:
         n = len(Shat_)
     for i in range(n):
-        # print(i)
+        # #print(i)
         w = window_tc(Shat_[i], 50, transpose)
         Shat_w += w
     return Shat_w
