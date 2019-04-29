@@ -8,10 +8,11 @@ import json
 import logging
 import configparser
 import numpy as np
+import utils as ut
 from . import remote_computations as remote
 from . import local_computations as local
 
-CONFIG_FILE = 'config.cfg'
+CONFIG_FILE = 'dkm_config.cfg'
 DEFAULT_k = 5
 DEFAULT_epsilon = 0.00001
 DEFAULT_shuffle = True
@@ -36,11 +37,12 @@ def dkm_remote_stop(**kwargs):
             remote_init_env
     """
     computation_output = dict(output=dict(computation_phase="dkm_remote_stop"),
-                              success=True)
-    return json.dumps(computation_output)
+                              )
+    return computation_output
 
 
-def dkm_remote_init_env(config_file=CONFIG_FILE,
+def dkm_remote_init_env(args,
+                        config_file=CONFIG_FILE,
                         k=DEFAULT_k,
                         optimization=DEFAULT_optimization,
                         epsilon=DEFAULT_epsilon,
@@ -76,9 +78,11 @@ def dkm_remote_init_env(config_file=CONFIG_FILE,
         # NEXT PHASE:
             local_init_env
     """
-
-    logging.info('REMOTE: Initializing remote environment')
-    if not os.path.exists(config_file):
+    state = args['state']
+    inputs = args['input']
+    ut.log('REMOTE: Initializing remote environment', state)
+    config_path = os.path.join(state['outputDirectory'], config_file)
+    if not os.path.exists(config_path):
         config = configparser.ConfigParser()
         config['REMOTE'] = dict(k=k,
                                 optimization=optimization,
@@ -89,17 +93,19 @@ def dkm_remote_init_env(config_file=CONFIG_FILE,
             config.write(file)
     # output
     computation_output = dict(
-        output=dict(work_dir=work_dir,
-                    config_file=config_file,
+        output=dict(work_dir='/computation',
+                    config_file=config_path,
                     k=k,
                     learning_rate=learning_rate,
                     optimization=optimization,
-                    shuffle=shuffle,
-                    computation_phase="dkm_remote_init_env"))
-    return json.dumps(computation_output)
+                    shuffle=True,
+                    computation_phase="dkm_remote_init_env"),
+        state=state
+    )
+    return computation_output
 
 
-def dkm_remote_init_centroids(args, config_file=CONFIG_FILE):
+def dkm_remote_init_centroids(args, **kwargs):
     """
         # Description:
             Initialize K centroids from locally selected centroids.
@@ -119,22 +125,32 @@ def dkm_remote_init_centroids(args, config_file=CONFIG_FILE):
         # NEXT PHASE:
             local_compute_optimizer
     """
-    logging.info('REMOTE: Initializing centroids')
+    state = args['state']
+    inputs = args['input']
+    ut.log('REMOTE: Initializing centroids', state)
+    config_file = inputs['config_file']
+    config = configparser.ConfigParser()
+    config.read(config_file)
+    k = config['k']
     # Have each site compute k initial clusters locally
     local_centroids = [cent for site in args for cent in args[site]]
     # and select k random clusters from the s*k pool
     np.random.shuffle(local_centroids)
     remote_centroids = local_centroids[:k]
-    computation_output = dict(output=dict(
-        work_dir=work_dir,
-        config_file=config_file,
-        centroids=remote_centroids,
-        computation_phase="dkm_remote_init_centroids"),
-                              success=True)
-    return json.dumps(computation_output)
+    computation_output = dict(
+        output=dict(
+            work_dir='.',
+            config_file=config_file,
+            # local_centroids=remote_centroids,
+            computation_phase="dkm_remote_init_centroids",
+            remote_centroids=remote_centroids
+        ),
+        state=state
+    )
+    return computation_output
 
 
-def dkm_remote_aggregate_optimizer(args, config_file=CONFIG_FILE):
+def dkm_remote_aggregate_optimizer(args):
     """
         # Description:
             Aggregate optimizers sent from local nodes.
@@ -154,26 +170,32 @@ def dkm_remote_aggregate_optimizer(args, config_file=CONFIG_FILE):
         # NEXT PHASE:
             remote_optimization_step
     """
+    state = args['state']
+    inputs = args['input']
+    config_file = inputs['config_file']
     config = configparser.ConfigParser()
     config.read(config_file)
+
     optimization = config['REMOTE']['optimization']
-    logging.info('REMOTE: Aggregate optimizer')
+    ut.log('REMOTE: Aggregate optimizer', state)
     local_optimizers = [site['local_optimizer'] for site in args]
+    s = len(local_optimizers)
     remote_optimizer = remote.aggregate_sum(local_optimizers)
     if optimization == 'lloyd':
         # for the mean, we need to further divide the number of sites
         remote_optimizer = [r / s for r in remote_optimizer]
 
-    computation_output = dict(output=dict(
-        remote_optimizer=remote_optimizer,
-        computation_phase="dkm_remote_aggregate_optimizer"),
-                              success=True)
-    return json.dumps(computation_output)
+    computation_output = dict(
+        output=dict(
+            remote_optimizer=remote_optimizer,
+            computation_phase="dkm_remote_aggregate_optimizer"
+        ),
+        state=state
+    )
+    return computation_output
 
 
-def dkm_remote_optimization_step(remote_centroids=None,
-                                 remote_optimizer=None,
-                                 config_file=CONFIG_FILE):
+def dkm_remote_optimization_step(args):
     """
         # Description:
             Use optimizer to take the next step.
@@ -196,8 +218,12 @@ def dkm_remote_optimization_step(remote_centroids=None,
         # NEXT PHASE:
             remote_check_convergence
     """
-
-    logging.info('REMOTE: Optimization step')
+    state = args['state']
+    inputs = args['input']
+    config_file = inputs['config_file']
+    remote_centroids = inputs['remote_centroids']
+    remote_optimizer = inputs['remote_optimizer']
+    ut.log('REMOTE: Optimization step', args['state'])
     config = configparser.ConfigParser()
     config.read(config_file)
     optimization = config['REMOTE']['optimization']
@@ -205,7 +231,6 @@ def dkm_remote_optimization_step(remote_centroids=None,
         # Then, update centroids as corresponding to the local mean
         previous_centroids = remote_centroids[:]
         remote_centroids = remote_optimizer[:]
-
     elif optimization == 'gradient':
         # Then, update centroids according to one step of gradient descent
         [remote_centroids, previous_centroids] = \
@@ -214,14 +239,12 @@ def dkm_remote_optimization_step(remote_centroids=None,
         computation_phase="dkm_remote_optimization_step",
         previous_centroids=previous_centroids,
         remote_centroids=remote_centroids),
-                              success=True)
-    return json.dumps(computation_output)
+        state=state
+    )
+    return computation_output
 
 
-def dkm_remote_check_convergence(args,
-                                 remote_centroids=None,
-                                 previous_centroids=None,
-                                 config_file=CONFIG_FILE):
+def dkm_remote_check_convergence(args):
     """
         # Description:
             Check convergence.
@@ -245,7 +268,12 @@ def dkm_remote_check_convergence(args,
         # NEXT PHASE:
             remote_check_convergence
     """
-    logging.info('REMOTE: Check convergence')
+    state = args['state']
+    inputs = args['input']
+    config_file = inputs['config_file']
+    remote_centroids = inputs['remote_centroids']
+    previous_centroids = inputs['previous_centroids']
+    ut.log('REMOTE: Check convergence', state)
     config = configparser.ConfigParser()
     config.read(config_file)
     epsilon = config['REMOTE']['epsilon']
@@ -257,11 +285,12 @@ def dkm_remote_check_convergence(args,
         delta=delta,
         remote_centroids=remote_centroids,
     ),
-                              success=True)
-    return json.dumps(computation_output)
+        state=state
+    )
+    return computation_output
 
 
-def dkm_remote_aggregate_output(remote_centroids=None):
+def dkm_remote_aggregate_output(args):
     """
         # Description:
             Check convergence.
@@ -281,13 +310,17 @@ def dkm_remote_aggregate_output(remote_centroids=None):
             -remote_centroids
 
     """
-    logging.info('REMOTE: Aggregating input')
+    state = args['state']
+    inputs = args['input']
+    remote_centroids = inputs['remote_centroids']
+    ut.log('REMOTE: Aggregating input', state)
     computation_output = dict(output=dict(
         computation_phase="dkm_remote_aggregate_output",
         remote_centroids=remote_centroids,
     ),
-                              success=True)
-    return json.dumps(computation_output)
+        state=state
+    )
+    return computation_output
 
 
 if __name__ == '__main__':
@@ -296,7 +329,7 @@ if __name__ == '__main__':
     phase_key = list(listRecursive(parsed_args, 'computation_phase'))
 
     if 'local_noop' in phase_key:  # FIRST PHASE
-        computation_output = remote_init_env(**parsed_args['input'])
+        computation_output = remote_init_env(parsed_args['input'])
         sys.stdout.write(computation_output)
     elif 'local_init_centroids' in phase_key:  # LOCAL -> REMOTE
         computation_output = remote_init_centroids(parsed_args['input'])

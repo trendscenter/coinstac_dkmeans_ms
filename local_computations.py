@@ -57,7 +57,7 @@ def initialize_own_centroids(local_X, k):
 
         Output: list of k many points selected from local_X
     """
-    return [local_X[i] for i in np.random.choice(len(local_X), k)]
+    return [local_X[i, :, :] for i in np.random.choice(local_X.shape[0], k)]
 
 
 def check_stopping(local_centroids, previous_centroids, epsilon):

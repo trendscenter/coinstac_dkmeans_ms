@@ -2,10 +2,11 @@ import os
 import sys
 import logging
 import numpy as np
+import utils as ut
 import configparser
 from . import local_computations as local
 
-CONFIG_FILE = 'config.cfg'
+CONFIG_FILE = 'dkm_config.cfg'
 DEFAULT_data_file = 'data.txt'
 DEFAULT_k = 5
 DEFAULT_shuffle = True
@@ -13,7 +14,7 @@ DEFAULT_learning_rate = 0.001
 DEFAULT_optimization = 'lloyd'
 
 
-def dkm_local_noop(**kwargs):
+def dkm_local_noop(args, **kwargs):
     """
         # Description:
             Nooperation
@@ -29,15 +30,15 @@ def dkm_local_noop(**kwargs):
             remote_init_env
     """
     computation_output = dict(output=dict(computation_phase="dkm_local_noop"),
-                              success=True)
-    return json.dumps(computation_output)
+                              )
+    return computation_output
 
 
-def dkm_local_init_env(config_file=CONFIG_FILE,
+def dkm_local_init_env(args,
+                       config_file=CONFIG_FILE,
                        k=DEFAULT_k,
                        optimization=DEFAULT_optimization,
                        shuffle=DEFAULT_shuffle,
-                       data_file=DEFAULT_data_file,
                        learning_rate=DEFAULT_learning_rate,
                        **kwargs):
     """
@@ -64,24 +65,31 @@ def dkm_local_init_env(config_file=CONFIG_FILE,
         # NEXT PHASE:
             local_init_centroids
     """
-    logging.info('LOCAL: Initializing remote environment')
-    if not os.path.exists(config_file):
+    state = args['state']
+    inputs = args['input']
+    data_file = inputs['all_windows']
+    ut.log('LOCAL: Initializing remote environment', state)
+    config_path = os.path.join(state['outputDirectory'], config_file)
+    if not os.path.exists(config_path):
         config = configparser.ConfigParser()
         config['LOCAL'] = dict(k=k,
                                optimization=optimization,
                                shuffle=shuffle,
                                data_file=data_file,
                                learning_rate=learning_rate)
-        with open(config_file, 'w') as file:
+        with open(config_path, 'w') as file:
             config.write(file)
     # output
-    computation_output = dict(output=dict(
-        config_file=config_file, computation_phase="dkm_local_init_env"),
-                              success=True)
-    return json.dumps(computation_output)
+    computation_output = dict(
+        output=dict(
+            config_file=config_path,
+            computation_phase="dkm_local_init_env"),
+        state=state
+    )
+    return computation_output
 
 
-def dkm_local_init_centroids(config_file=CONFIG_FILE, **kwargs):
+def dkm_local_init_centroids(args, **kwargs):
     """
         # Description:
             Initialize K centroids from own data.
@@ -101,23 +109,25 @@ def dkm_local_init_centroids(config_file=CONFIG_FILE, **kwargs):
         # NEXT PHASE:
             remote_init_centroids
     """
-    logging.info('LOCAL: Initializing centroids')
+    state = args['state']
+    inputs = args['input']
+    config_file = inputs['config_file']
+    ut.log('LOCAL: Initializing centroids', state)
     config = configparser.ConfigParser()
     config.read(config_file)
-    data = np.loadtxt(config['LOCAL']['data_file'])
+    data = np.load(config['LOCAL']['data_file'])
     centroids = local.initialize_own_centroids(data, config['LOCAL']['k'])
     # output
     computation_output = dict(output=dict(
         config_file=config_file,
         centroids=centroids,
         computation_phase="dkm_local_init_env"),
-                              success=True)
-    return json.dumps(computation_output)
+        state=state
+    )
+    return computation_output
 
 
-def dkm_local_compute_clustering(config_file=CONFIG_FILE,
-                                 remote_centroids=None,
-                                 computation_phase=None,
+def dkm_local_compute_clustering(args,
                                  **kwargs):
     """
         # Description:
@@ -141,7 +151,12 @@ def dkm_local_compute_clustering(config_file=CONFIG_FILE,
         # NEXT PHASE:
             remote_init_centroids
     """
-    logging.info('LOCAL: computing clustering')
+    inputs = args['input']
+    state = args['state']
+    config_file = inputs['config_file']
+    remote_centroids = inputs['remote_centroids']
+    computation_phase = inputs['computation_phase']
+    ut.log('LOCAL: computing clustering', state)
     if remote_centroids is None:
         raise ValueError(
             "LOCAL: at local_compute_clustering - remote_centroids not passed correctly"
@@ -164,13 +179,12 @@ def dkm_local_compute_clustering(config_file=CONFIG_FILE,
         cluster_labels=cluster_labels,
         remote_centroids=remote_centroids,
     ),
-                              success=True)
-    return json.dumps(computation_output)
+        state=state
+    )
+    return computation_output
 
 
-def dkm_local_compute_optimizer(config_file=CONFIG_FILE,
-                                remote_centroids=None,
-                                cluster_labels=None,
+def dkm_local_compute_optimizer(args,
                                 **kwargs):
     """
         # Description:
@@ -193,6 +207,11 @@ def dkm_local_compute_optimizer(config_file=CONFIG_FILE,
         # NEXT PHASE:
             remote_init_centroids
     """
+    state = args['state']
+    inputs = args['input']
+    config_file = inputs['config_file']
+    remote_centroids = inputs['remote_centroids']
+    cluster_labels = inputs['cluster_labels']
     if remote_centroids is None:
         raise ValueError(
             "LOCAL: at local_compute_clustering - remote_centroids not passed correctly"
@@ -201,7 +220,7 @@ def dkm_local_compute_optimizer(config_file=CONFIG_FILE,
         raise ValueError(
             "LOCAL: at local_compute_clustering - cluster_labels not passed correctly"
         )
-    logging.info('LOCAL: computing optimizers')
+    ut.log('LOCAL: computing optimizers', state)
     config = configparser.ConfigParser()
     config.read(config_file)
     data = np.loadtxt(config['LOCAL']['data_file'])
@@ -218,8 +237,9 @@ def dkm_local_compute_optimizer(config_file=CONFIG_FILE,
     computation_output = dict(output=dict(
         local_optimizer=local_optimizer,
         computation_phase="dkm_local_compute_optimizer"),
-                              success=True)
-    return json.dumps(computation_output)
+        state=state
+    )
+    return computation_output
 
 
 if __name__ == '__main__':
