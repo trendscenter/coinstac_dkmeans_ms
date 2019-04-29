@@ -116,7 +116,7 @@ def dkm_local_init_centroids(args, **kwargs):
     config = configparser.ConfigParser()
     config.read(config_file)
     data = np.load(config['LOCAL']['data_file'])
-    centroids = local.initialize_own_centroids(data, config['LOCAL']['k'])
+    centroids = local.initialize_own_centroids(data, int(config['LOCAL']['k']))
     # output
     computation_output = dict(output=dict(
         config_file=config_file,
@@ -224,7 +224,7 @@ def dkm_local_compute_optimizer(args,
     config = configparser.ConfigParser()
     config.read(config_file)
     data = np.loadtxt(config['LOCAL']['data_file'])
-    k = config['LOCAL']['k']
+    k = int(config['LOCAL']['k'])
     learning_rate = config['LOCAL']['learning_rate']
     optimization = config['LOCAL']['optimization']
     if optimization == 'lloyd':

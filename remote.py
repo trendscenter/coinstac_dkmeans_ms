@@ -80,6 +80,7 @@ def dkm_remote_init_env(args,
     """
     state = args['state']
     inputs = args['input']
+    cache = args['cache']
     ut.log('REMOTE: Initializing remote environment', state)
     config_path = os.path.join(state['outputDirectory'], config_file)
     if not os.path.exists(config_path):
@@ -100,12 +101,13 @@ def dkm_remote_init_env(args,
                     optimization=optimization,
                     shuffle=True,
                     computation_phase="dkm_remote_init_env"),
-        state=state
+        state=state,
+        cache=cache
     )
     return computation_output
 
 
-def dkm_remote_init_centroids(args, **kwargs):
+def dkm_remote_init_centroids(args, config_file=CONFIG_FILE, **kwargs):
     """
         # Description:
             Initialize K centroids from locally selected centroids.
@@ -128,7 +130,7 @@ def dkm_remote_init_centroids(args, **kwargs):
     state = args['state']
     inputs = args['input']
     ut.log('REMOTE: Initializing centroids', state)
-    config_file = inputs['config_file']
+    config_file = os.path.join(state['outputDirectory'], config_file)
     config = configparser.ConfigParser()
     config.read(config_file)
     k = config['k']
@@ -150,7 +152,7 @@ def dkm_remote_init_centroids(args, **kwargs):
     return computation_output
 
 
-def dkm_remote_aggregate_optimizer(args):
+def dkm_remote_aggregate_optimizer(args, config_file=CONFIG_FILE):
     """
         # Description:
             Aggregate optimizers sent from local nodes.
@@ -172,7 +174,7 @@ def dkm_remote_aggregate_optimizer(args):
     """
     state = args['state']
     inputs = args['input']
-    config_file = inputs['config_file']
+    config_file = os.path.join(state['outputDirectory'], config_file)
     config = configparser.ConfigParser()
     config.read(config_file)
 
@@ -195,7 +197,7 @@ def dkm_remote_aggregate_optimizer(args):
     return computation_output
 
 
-def dkm_remote_optimization_step(args):
+def dkm_remote_optimization_step(args, config_file=CONFIG_FILE):
     """
         # Description:
             Use optimizer to take the next step.
@@ -220,7 +222,7 @@ def dkm_remote_optimization_step(args):
     """
     state = args['state']
     inputs = args['input']
-    config_file = inputs['config_file']
+    config_path = os.path.join(state['outputDirectory'], config_file)
     remote_centroids = inputs['remote_centroids']
     remote_optimizer = inputs['remote_optimizer']
     ut.log('REMOTE: Optimization step', args['state'])
