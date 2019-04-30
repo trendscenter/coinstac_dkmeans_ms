@@ -261,7 +261,6 @@ def dkm_remote_optimization_step(args, config_file=CONFIG_FILE):
     elif optimization == 'gradient':
         # Then, update centroids according to one step of gradient descent
         [remote_centroids, previous_centroids] = local.gradient_step(remote_optimizer, remote_centroids)
-    assert ((remote_centroids[0] != remote_centroids[1]).all())
     cache['previous_centroids'] = previous_centroids
     cache['remote_centroids'] = remote_centroids
     computation_output = dict(output=dict(

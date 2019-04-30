@@ -33,7 +33,6 @@ def compute_mean(local_X, local_cluster_labels, k):
     #  Return the origin if no clusters have been assigned to cluster k
     #  !!! is this the way to handle this?
     LM = [np.mean(lmean, 0) if lmean else np.zeros(local_X[0].shape) for lmean in local_means]
-    assert((LM[0] != LM[1]).all())
     return LM
 
 

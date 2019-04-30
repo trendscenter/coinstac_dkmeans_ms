@@ -244,7 +244,6 @@ def dkm_local_compute_optimizer(args,
         local_optimizer = \
             local.compute_gradient(data, cluster_labels[i],
                                    remote_centroids, learning_rate)
-    assert((local_optimizer[0] != local_optimizer[1]).all())
     outdir = state['outputDirectory']
     np.save(os.path.join(outdir, 'local_optimizer.npy'), local_optimizer)
     np.save(os.path.join(outdir, 'local_cluster_labels.npy'), cluster_labels)
