@@ -65,31 +65,33 @@ def dkm_local_init_env(args,
         # NEXT PHASE:
             local_init_centroids
     """
-    state = args['state']
-    inputs = args['input']
-    data_file = inputs['all_windows']
+    state, inputs, cache = ut.resolve_args(args)
+    data_file = ut.resolve_input('all_windows', cache)
     ut.log('LOCAL: Initializing remote environment', state)
     config_path = os.path.join(state['outputDirectory'], config_file)
-    if not os.path.exists(config_path):
-        config = configparser.ConfigParser()
-        config['LOCAL'] = dict(k=k,
-                               optimization=optimization,
-                               shuffle=shuffle,
-                               data_file=data_file,
-                               learning_rate=learning_rate)
-        with open(config_path, 'w') as file:
-            config.write(file)
+    cache['config_file'] = config_path
+    config = configparser.ConfigParser()
+    config['LOCAL'] = dict(k=k,
+                           optimization=optimization,
+                           shuffle=shuffle,
+                           data_file=data_file,
+                           learning_rate=learning_rate)
+    with open(config_path, 'w') as file:
+        config.write(file)
     # output
     computation_output = dict(
         output=dict(
             config_file=config_path,
             computation_phase="dkm_local_init_env"),
-        state=state
+        state=state,
+        cache=cache
     )
     return computation_output
 
 
-def dkm_local_init_centroids(args, **kwargs):
+def dkm_local_init_centroids(args,
+                             config_file=CONFIG_FILE,
+                             **kwargs):
     """
         # Description:
             Initialize K centroids from own data.
@@ -109,25 +111,29 @@ def dkm_local_init_centroids(args, **kwargs):
         # NEXT PHASE:
             remote_init_centroids
     """
-    state = args['state']
-    inputs = args['input']
-    config_file = inputs['config_file']
+    state, inputs, cache = ut.resolve_args(args)
+    config_file = ut.resolve_input('config_file', cache)
     ut.log('LOCAL: Initializing centroids', state)
     config = configparser.ConfigParser()
     config.read(config_file)
     data = np.load(config['LOCAL']['data_file'])
     centroids = local.initialize_own_centroids(data, int(config['LOCAL']['k']))
+    np.save(os.path.join(state['outputDirectory'], 'initial_centroids'), 'centroids')
+    ut.log('Local centroids looks like %s' % (str(type(centroids))), state)
     # output
+    cache['local_centroids'] = centroids
     computation_output = dict(output=dict(
         config_file=config_file,
-        centroids=centroids,
+        local_centroids=centroids,
         computation_phase="dkm_local_init_env"),
-        state=state
+        state=state,
+        cache=cache
     )
     return computation_output
 
 
 def dkm_local_compute_clustering(args,
+                                 config_file=CONFIG_FILE,
                                  **kwargs):
     """
         # Description:
@@ -151,11 +157,10 @@ def dkm_local_compute_clustering(args,
         # NEXT PHASE:
             remote_init_centroids
     """
-    inputs = args['input']
-    state = args['state']
-    config_file = inputs['config_file']
-    remote_centroids = inputs['remote_centroids']
-    computation_phase = inputs['computation_phase']
+    state, inputs, cache = ut.resolve_args(args)
+    config_file = ut.resolve_input('config_file', cache)
+    remote_centroids = ut.resolve_input('remote_centroids', inputs)
+    computation_phase = ut.resolve_input('computation_phase', inputs)
     ut.log('LOCAL: computing clustering', state)
     if remote_centroids is None:
         raise ValueError(
@@ -167,24 +172,30 @@ def dkm_local_compute_clustering(args,
         )
     config = configparser.ConfigParser()
     config.read(config_file)
-    data = np.loadtxt(config['LOCAL']['data_file'])
+    ut.log('Config file is %s, with keys %s' % (config_file, str(dict(config))), state)
+
+    data = np.load(config['LOCAL']['data_file'])
 
     cluster_labels = local.compute_clustering(data, remote_centroids)
 
     new_comp_phase = "dkm_local_compute_clustering"
     if computation_phase == "dkm_remote_optimization_step":
         new_comp_phase = "dkm_local_compute_clustering_2"
-    computation_output = dict(output=dict(
+
+    computation_output = ut.default_computation_output(args)
+    cache['cluster_labels'] = cluster_labels
+    cache['remote_centroids'] = remote_centroids
+    computation_output['output'] = dict(
         computation_phase=new_comp_phase,
-        cluster_labels=cluster_labels,
         remote_centroids=remote_centroids,
-    ),
-        state=state
+        cluster_labels=cluster_labels
     )
+    computation_output['cache'] = cache
     return computation_output
 
 
 def dkm_local_compute_optimizer(args,
+                                config_file=CONFIG_FILE,
                                 **kwargs):
     """
         # Description:
@@ -207,11 +218,10 @@ def dkm_local_compute_optimizer(args,
         # NEXT PHASE:
             remote_init_centroids
     """
-    state = args['state']
-    inputs = args['input']
-    config_file = inputs['config_file']
-    remote_centroids = inputs['remote_centroids']
-    cluster_labels = inputs['cluster_labels']
+    state, inputs, cache = ut.resolve_args(args)
+    config_file = ut.resolve_input('config_file', cache)
+    remote_centroids = ut.resolve_input('remote_centroids', inputs, cache)
+    cluster_labels = ut.resolve_input('cluster_labels', inputs, cache)
     if remote_centroids is None:
         raise ValueError(
             "LOCAL: at local_compute_clustering - remote_centroids not passed correctly"
@@ -223,7 +233,7 @@ def dkm_local_compute_optimizer(args,
     ut.log('LOCAL: computing optimizers', state)
     config = configparser.ConfigParser()
     config.read(config_file)
-    data = np.loadtxt(config['LOCAL']['data_file'])
+    data = np.load(config['LOCAL']['data_file'])
     k = int(config['LOCAL']['k'])
     learning_rate = config['LOCAL']['learning_rate']
     optimization = config['LOCAL']['optimization']
@@ -234,36 +244,13 @@ def dkm_local_compute_optimizer(args,
         local_optimizer = \
             local.compute_gradient(data, cluster_labels[i],
                                    remote_centroids, learning_rate)
+    assert((local_optimizer[0] != local_optimizer[1]).all())
+    outdir = state['outputDirectory']
+    np.save(os.path.join(outdir, 'local_optimizer.npy'), local_optimizer)
+    np.save(os.path.join(outdir, 'local_cluster_labels.npy'), cluster_labels)
     computation_output = dict(output=dict(
         local_optimizer=local_optimizer,
         computation_phase="dkm_local_compute_optimizer"),
         state=state
     )
     return computation_output
-
-
-if __name__ == '__main__':
-
-    parsed_args = json.loads(sys.stdin.read())
-    phase_key = list(listRecursive(parsed_args, 'computation_phase'))
-    if not phase_key:  # FIRST PHASE
-        computation_output = local_noop(**parsed_args['input'])
-        sys.stdout.write(computation_output)
-    elif "remote_init_env" in phase_key:  # REMOTE -> LOCAL
-        computation_output = local_init_env(**parsed_args['input'])
-        computation_output = local_init_centroids(**computation_output)
-        sys.stdout.write(computation_output)
-    elif "remote_init_centroids" in phase_key:  # REMOTE -> LOCAL
-        computation_output = local_compute_clustering(**parsed_args['input'])
-        computation_output = local_compute_optimizer(**computation_output)
-        sys.stdout.write(computation_output)
-    elif "remote_optimization_step" in phase_key:  # REMOTE -> LOCAL
-        computation_output = local_compute_clustering(**parsed_args['input'])
-        sys.stdout.write(computation_output)
-    elif 'remote_converged_false' in phase_key:  # REMOTE -> LOCAL
-        computation_output = local_compute_optimizer(**parsed_args['input'])
-        sys.stdout.write(computation_output)
-    elif 'remote_aggregate_output' in phase_key:  # REMOTE -> LOCAL
-        computation_output = local_compute_clustering(**parsed_args['input'])
-    else:
-        raise ValueError('Phase error occurred at LOCAL')

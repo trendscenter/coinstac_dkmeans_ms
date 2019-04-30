@@ -28,9 +28,9 @@ def closest_centroids(local_centroids):
                 distance
     """
     flat_centroids = np.matrix(
-             np.vstack([np.vstack([wi.reshape(1, np.prod(wi.shape))
-                                   for wi in w])
-                       for w in local_centroids]))
+        np.vstack([np.vstack([wi.reshape(1, np.prod(wi.shape))
+                              for wi in w])
+                   for w in local_centroids]))
     unions = []
     distances = squareform(pdist(flat_centroids))
     # fill the lower triangular with inf to make the relation asymmetric
@@ -72,4 +72,4 @@ def aggregate_clusters(local_centroids):
 
 
 def aggregate_sum(local_objects):
-    return list(np.sum(local_objects, 0))
+    return np.sum(local_objects, 0).tolist()

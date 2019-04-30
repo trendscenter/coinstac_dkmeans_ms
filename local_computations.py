@@ -24,14 +24,17 @@ def compute_mean(local_X, local_cluster_labels, k):
         Output: list of k many local mean matrices, shape m x n
     """
     m, n = get_data_dims(local_X)
-    npinf = np.zeros([m, n])
-    local_means = [[]] * k
-    for label, x in zip(local_cluster_labels, local_X):
-        local_means[label] += [x]
-
+    local_means = [[] for i in range(k)]
+    L = len(local_X)
+    for label, i in zip(local_cluster_labels, range(L)):
+        local_means[label] += [local_X[i]]
+    # raise(Exception("Sizes are %d %d %d %d %d" % (len(local_means[0]), len(
+    #    local_means[1]), len(local_means[2]), len(local_means[3]), len(local_means[4]))))
     #  Return the origin if no clusters have been assigned to cluster k
     #  !!! is this the way to handle this?
-    return [np.mean(lmean, 0) if lmean else npinf for lmean in local_means]
+    LM = [np.mean(lmean, 0) if lmean else np.zeros(local_X[0].shape) for lmean in local_means]
+    assert((LM[0] != LM[1]).all())
+    return LM
 
 
 def gradient_step(local_gradients, local_centroids):
@@ -79,7 +82,7 @@ def check_stopping(local_centroids, previous_centroids, epsilon):
     # delta is the change in centroids, computed by distance metric
     delta = np.sum(
         [cdist(w, flat_previous[k]) for k, w in enumerate(flat_centroids)])
-    return delta > epsilon, delta
+    return delta < epsilon, delta
 
 
 def compute_clustering(local_X, local_centroids):
@@ -94,8 +97,8 @@ def compute_clustering(local_X, local_centroids):
     """
     cluster_labels = []
     m, n = get_data_dims(local_X)
-    X_flat = [np.matrix(x.reshape(1, m * n)) for x in local_X]
-    w_flat = [np.matrix(w.reshape(1, m * n)) for w in local_centroids]
+    X_flat = [np.matrix(np.array(x).reshape(1, m * n)) for x in local_X]
+    w_flat = [np.matrix(np.array(w).reshape(1, m * n)) for w in local_centroids]
     for x in X_flat:
         distances = [cdist(x, w) for w in w_flat]
         min_index = distances.index(np.min(distances))
