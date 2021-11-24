@@ -200,13 +200,16 @@ def dkm_remote_aggregate_optimizer(args, config_file=CONFIG_FILE):
             remote_opt2 = [np.array(c) for c in remote_optimizer]
             remote_optimizer = remote_opt2[:]
         except Exception as e:
-            raise(Exception("Hit valueerror. Remote optimizer types are %s" % ([len(r) for r in remote_optimizer])))
+            raise (Exception("Hit valueerror. Remote optimizer types are %s" % ([len(r) for r in remote_optimizer])))
     if optimization == 'lloyd':
         # for the mean, we need to further divide the number of sites
         try:
             remote_optimizer = [r / s for r in remote_optimizer]
         except Exception as e:
-            raise(Exception("Hit valueerror. Remote optimizer types are %s" % ([len(r) for r in remote_optimizer])))
+            raise (Exception("Hit valueerror. Remote optimizer types are %s" % ([len(r) for r in remote_optimizer])))
+
+    """Debugged by AK"""
+    remote_optimizer = [a.tolist() if isinstance(a, np.ndarray) else a for a in remote_optimizer]
     cache['remote_optimizer'] = remote_optimizer
     computation_output = dict(
         output=dict(
@@ -261,6 +264,11 @@ def dkm_remote_optimization_step(args, config_file=CONFIG_FILE):
     elif optimization == 'gradient':
         # Then, update centroids according to one step of gradient descent
         [remote_centroids, previous_centroids] = local.gradient_step(remote_optimizer, remote_centroids)
+
+    """ Debugged by AK """
+    previous_centroids = [a.tolist() if isinstance(a, np.ndarray) else a for a in previous_centroids]
+    remote_centroids = [a.tolist() if isinstance(a, np.ndarray) else a for a in remote_centroids]
+
     cache['previous_centroids'] = previous_centroids
     cache['remote_centroids'] = remote_centroids
     computation_output = dict(output=dict(
@@ -308,6 +316,9 @@ def dkm_remote_check_convergence(args, config_file=CONFIG_FILE):
                                                previous_centroids, epsilon)
     ut.log('REMOTE: Convergence Delta is %f, Converged is %s' % (delta, remote_check), state)
     new_phase = "dkm_remote_converged_true" if remote_check else "dkm_remote_converged_false"
+
+    """Debugged by AK"""
+    remote_centroids = [a.tolist() if isinstance(a, np.ndarray) else a for a in remote_centroids]
     computation_output = dict(
         output=dict(
             computation_phase=new_phase,
