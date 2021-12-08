@@ -241,12 +241,14 @@ def dkm_local_compute_optimizer(args,
         local_optimizer = local.compute_mean(data, cluster_labels, k)
     elif optimization == 'gradient':
         # Gradient descent has sites compute gradients locally
-        local_optimizer = \
-            local.compute_gradient(data, cluster_labels[i],
-                                   remote_centroids, learning_rate)
+        local_optimizer = local.compute_gradient(data, cluster_labels[i], remote_centroids, learning_rate)
+
     outdir = state['outputDirectory']
     np.save(os.path.join(outdir, 'local_optimizer.npy'), local_optimizer)
     np.save(os.path.join(outdir, 'local_cluster_labels.npy'), cluster_labels)
+
+    """ Debugged by AK """
+    local_optimizer = [l.tolist() if isinstance(l, np.ndarray) else l for l in local_optimizer]
     computation_output = dict(output=dict(
         local_optimizer=local_optimizer,
         computation_phase="dkm_local_compute_optimizer"),
